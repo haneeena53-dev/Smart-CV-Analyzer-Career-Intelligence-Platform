@@ -1,0 +1,6 @@
+{
+  "name": "Smart CV Analyzer & Career Intelligence Platform",
+  "description": "منصة ذكية متكاملة لتحليل السيرة الذاتية (CV)، قياس التوافق مع أنظمة ATS، ومقارنتها بالوظائف المستهدفة مع خارطة طريق لتطوير المهارات وتحسين المحتوى بالذكاء الاصطناعي.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
