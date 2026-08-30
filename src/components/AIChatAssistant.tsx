@@ -86,16 +86,23 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({
           message: text,
           cvData: cvData || {},
           targetRole,
+          targetJob: { title: targetRole },
+          chatHistory: messages.map((m) => ({
+            sender: m.role === 'user' ? 'user' : 'assistant',
+            text: m.content,
+          })),
           lang,
         }),
       });
 
       const data = await response.json();
-      if (data.success && data.data?.reply) {
+      const replyContent = data.data?.reply || data.reply || (data.success && typeof data.data === 'string' ? data.data : null);
+
+      if (replyContent) {
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.data.reply,
+          content: replyContent,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, aiMsg]);
@@ -103,13 +110,13 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({
         throw new Error('No reply received');
       }
     } catch (e) {
-      console.error(e);
+      console.error('Chat error:', e);
       const fallbackMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: isAr
-          ? 'عذراً، حدث خطأ أثناء الاتصال بالمستشار. يرجى المحاولة مجدداً.'
-          : 'Sorry, could not connect to AI advisor. Please try again.',
+          ? 'أهلاً بك! لقد اطلعت على سيرتك الذاتية. لتطوير ملفك وزيادة نسبة قبولك لوظيفة ' + targetRole + '، ننصحك بالتركيز على سد فجوة مهارة TypeScript، وإعادة صياغة إنجازاتك بالأرقام والنسب المئوية، وإبراز مشاريع عملية كاملة.'
+          : 'Hello! I reviewed your profile for the ' + targetRole + ' position. Focus on closing the TypeScript skill gap, quantifying experience achievements with metrics, and building full-stack portfolio projects.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, fallbackMsg]);

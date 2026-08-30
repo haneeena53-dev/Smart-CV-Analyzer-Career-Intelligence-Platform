@@ -3,8 +3,14 @@ import { Upload, FileText, Clipboard, Sparkles, CheckCircle2, AlertCircle, Loade
 import { Language } from '../types';
 import { SAMPLE_CV_HANEEN, SAMPLE_CV_OMAR } from '../data/sampleProfiles';
 
+interface UploadPayload {
+  rawText?: string;
+  fileBase64?: string;
+  fileName?: string;
+}
+
 interface UploadSectionProps {
-  onCVUploaded: (rawText: string) => Promise<void>;
+  onCVUploaded: (payload: UploadPayload | string) => Promise<void>;
   onLoadSample: (sampleKey: 'haneen' | 'omar') => void;
   isLoading: boolean;
   loadingStep: string;
@@ -58,22 +64,36 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
   const processFile = async (file: File) => {
     setSelectedFileName(file.name);
+    setErrorMsg(null);
     try {
-      // Read file content as text
+      // If plain text file (.txt)
+      if (file.name.toLowerCase().endsWith('.txt') || file.type === 'text/plain') {
+        const text = await file.text();
+        if (text && text.trim().length >= 10) {
+          await onCVUploaded({ rawText: text, fileName: file.name });
+          return;
+        }
+      }
+
+      // For PDF, DOCX, Word, or binary documents: read as Base64 to preserve exact data for server parsing
       const reader = new FileReader();
       reader.onload = async (event) => {
-        const text = event.target?.result as string;
-        if (!text || text.trim().length < 20) {
-          // If binary or too short, pass default sample representation or parsed text
-          await onCVUploaded(text || SAMPLE_CV_HANEEN.rawText);
+        const result = event.target?.result as string;
+        if (result) {
+          const base64Data = result.includes(',') ? result.split(',')[1] : result;
+          await onCVUploaded({
+            fileBase64: base64Data,
+            fileName: file.name,
+            rawText: '',
+          });
         } else {
-          await onCVUploaded(text);
+          setErrorMsg(isAr ? 'تعذر قراءة محتوى الملف، يرجى المحاولة بنسخ النص ولصقه.' : 'Could not read file, please try pasting the text.');
         }
       };
       reader.onerror = () => {
         setErrorMsg(isAr ? 'حدث خطأ أثناء قراءة الملف، يمكنك لصق النص مباشرة.' : 'Error reading file, please paste text directly.');
       };
-      reader.readAsText(file);
+      reader.readAsDataURL(file);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(isAr ? 'تعذر قراءة الملف، جرب لصق النص.' : 'Could not read file, try pasting text.');
@@ -81,12 +101,12 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   };
 
   const handlePasteSubmit = async () => {
-    if (!pastedText.trim() || pastedText.trim().length < 30) {
-      setErrorMsg(isAr ? 'يرجى لصق نص كافٍ للسيرة الذاتية (30 حرفاً على الأقل).' : 'Please paste sufficient CV text (at least 30 chars).');
+    if (!pastedText.trim() || pastedText.trim().length < 15) {
+      setErrorMsg(isAr ? 'يرجى لصق نص كافٍ للسيرة الذاتية (15 حرفاً على الأقل).' : 'Please paste sufficient CV text.');
       return;
     }
     setErrorMsg(null);
-    await onCVUploaded(pastedText);
+    await onCVUploaded({ rawText: pastedText.trim() });
   };
 
   return (

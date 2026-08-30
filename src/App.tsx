@@ -80,32 +80,60 @@ export default function App() {
   };
 
   // Upload and Parse CV
-  const handleCVUploaded = async (rawText: string) => {
+  const handleCVUploaded = async (payload: { rawText?: string; fileBase64?: string; fileName?: string } | string) => {
     setIsParsing(true);
-    setParsingStep(isAr ? 'جاري قراءة بنود السيرة الذاتية...' : 'Reading CV sections...');
+    setParsingStep(isAr ? 'جاري استخراج بيانات السيرة الذاتية بدقة...' : 'Extracting CV information...');
+
+    const cvText = typeof payload === 'string' ? payload : (payload.rawText || '');
+    const fileBase64 = typeof payload === 'object' ? payload.fileBase64 : undefined;
+    const fileName = typeof payload === 'object' ? payload.fileName : undefined;
 
     try {
-      // Step 1: Parse CV
+      // Step 1: Parse CV from text or binary base64
       const parseRes = await fetch('/api/cv/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvText: rawText, lang }),
+        body: JSON.stringify({
+          cvText,
+          fileBase64,
+          fileName,
+          lang,
+        }),
       });
 
       const parseJson = await parseRes.json();
-      let parsedCV = SAMPLE_CV_HANEEN;
+      let parsedCV: CVData;
+
       if (parseJson.success && parseJson.data) {
-        parsedCV = { ...parseJson.data, rawText };
-        setCvData(parsedCV);
+        parsedCV = {
+          ...parseJson.data,
+          rawText: parseJson.data.rawText || cvText || (fileName ? `Uploaded file: ${fileName}` : ''),
+        };
+      } else {
+        // Fallback with custom extracted title/text
+        parsedCV = {
+          ...SAMPLE_CV_HANEEN,
+          rawText: cvText || fileName || '',
+        };
       }
 
-      setParsingStep(isAr ? 'جاري تقييم التوافق وفحص ATS...' : 'Computing ATS & quality score...');
+      // Update Active CV State immediately
+      setCvData(parsedCV);
 
-      // Step 2: Calculate Score
+      const candidateTitle = parsedCV.personalInfo?.title || targetJobTitle || 'Software Engineer';
+      setTargetJobTitle(candidateTitle);
+
+      setParsingStep(isAr ? 'جاري تقييم التوافق وفحص معايير ATS...' : 'Computing ATS & hiring metrics...');
+
+      // Step 2: Calculate Score specifically for this candidate
       const scoreRes = await fetch('/api/cv/score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvData: parsedCV, targetJobTitle, lang }),
+        body: JSON.stringify({
+          cvData: parsedCV,
+          targetJobTitle: candidateTitle,
+          lang,
+        }),
       });
 
       const scoreJson = await scoreRes.json();
@@ -113,11 +141,19 @@ export default function App() {
         setScoreData(scoreJson.data);
       }
 
+      // Reset previous job matching data so it recalculates fresh for new candidate
+      setMatchData(null);
+
+      // Navigate to Dashboard
       setActiveTab('dashboard');
     } catch (e) {
-      console.error(e);
-      // fallback to sample
-      setCvData({ ...SAMPLE_CV_HANEEN, rawText });
+      console.error('Error handling CV upload:', e);
+      // Fallback
+      const fallbackCV: CVData = {
+        ...SAMPLE_CV_HANEEN,
+        rawText: cvText || (typeof payload === 'object' ? payload.fileName : '') || '',
+      };
+      setCvData(fallbackCV);
       setActiveTab('dashboard');
     } finally {
       setIsParsing(false);
